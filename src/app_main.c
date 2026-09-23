@@ -43,16 +43,19 @@ void sha256(const char *input, uint8_t output[32]) {
     ets_sha_disable();
 }
 
-static void handle_list(const char *pin) {
+bool check_pin(const char *pin) {
     uint8_t pin_hash[32];
 
     sha256(pin, pin_hash);
 
     if (memcmp(pin_hash, PIN_HASH, 32) != 0) {
-        printf("Incorrect PIN\n");
-        return;
+        return false;
     }
 
+    return true;
+}
+
+static void handle_list() {
     printf("Files:\n");
 
     for (size_t i = 0; i < FILE_COUNT; i++) {
@@ -83,11 +86,11 @@ static void run_command(char *line) {
             return;
         }
 
-        handle_list(arg);
-
-    } else {
-
-        printf("unknown command: '%s' (type 'help')\n", cmd);
+        if (check_pin(arg)) {
+            handle_list();
+        } else {
+            printf("Incorrect PIN\n");
+        }
     }
 }
 
@@ -108,7 +111,7 @@ void app_main(void) {
     usb_console_init();
 
     printf("\nESP32-C3 command console ready. Type 'help' for commands.\n");
-    //printf("> ");
+    printf("> ");
     fflush(stdout);
 
     while (1) {
@@ -129,7 +132,7 @@ void app_main(void) {
 
             idx = 0;
 
-            //printf("> ");
+            printf("> ");
             fflush(stdout);
 
             continue;
@@ -142,5 +145,7 @@ void app_main(void) {
         if (idx < CMD_BUF_SIZE - 1) {
             line[idx++] = (char)c;
         }
+
+        
     }
 }
