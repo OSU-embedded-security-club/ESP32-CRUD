@@ -3,7 +3,6 @@ import sys
 import time
 import serial
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Send 'list' command with PIN to ESP32 over serial."

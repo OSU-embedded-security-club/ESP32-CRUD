@@ -7,6 +7,9 @@
 
 #define CMD_BUF_SIZE 128
 
+static int failed_attempts = 0;
+static int delay = 500;
+
 static const char *files[] = {
     "secrets.txt",
     "user_data.csv",
@@ -85,11 +88,18 @@ static void run_command(char *line) {
             printf("Usage: list <PIN>\n");
             return;
         }
+        led_on();
+        if (failed_attempts < 3) {
+            if (check_pin(arg)) {
+                failed_attempts = 0;
+                handle_list();
+            } else {
+                failed_attempts++;
 
-        if (check_pin(arg)) {
-            handle_list();
+                printf("Incorrect PIN\n");
+            }
         } else {
-            printf("Incorrect PIN\n");
+            printf("Too many failed attempts.\n");
         }
     }
 }
@@ -102,14 +112,12 @@ static void usb_console_init(void) {
     usb_serial_jtag_vfs_use_driver();
 }
 
-
-
 void app_main(void) {
     char line[CMD_BUF_SIZE];
     size_t idx = 0;
 
     usb_console_init();
-
+    vTaskDelay(pdMS_TO_TICKS(delay));
     printf("\nESP32-C3 command console ready. Type 'help' for commands.\n");
     printf("> ");
     fflush(stdout);
@@ -127,6 +135,8 @@ void app_main(void) {
             line[idx] = '\0';
 
             putchar('\n');
+
+            vTaskDelay(pdMS_TO_TICKS(delay));
 
             run_command(line);
 
@@ -146,6 +156,5 @@ void app_main(void) {
             line[idx++] = (char)c;
         }
 
-        
     }
 }
