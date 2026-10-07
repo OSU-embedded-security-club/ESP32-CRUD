@@ -12,7 +12,7 @@ def c_array(data):
         rows.append("    " + ", ".join(f"0x{b:02x}" for b in data[i:i + 8]))
     return ",\n".join(rows)
 
-pin = os.environ.get("DEVICE_PIN")
+pin = env.GetProjectOption("device_pin")
 
 if not pin:
     raise RuntimeError("DEVICE_PIN environment variable not set")

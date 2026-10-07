@@ -23,6 +23,9 @@
 #include "freertos/task.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
+#include "nvs.h"
+#include "nvs_flash.h"
+#include "esp_err.h"
 
 #include "secrets.h"
 #include "crypto.h"
@@ -60,13 +63,37 @@ typedef struct {
  
 typedef struct {
     uint8_t len;
-    uint8_t name[MAX_NAME];
     uint8_t data[MAX_DATA];
 } slot_t;
  
 static slot_t    slots[SLOT_COUNT];
 static request_t req;
 static int       failed_attempts = 0;
+
+static nvs_handle_t store;
+
+static void storage_init(void) {
+    ESP_ERROR_CHECK(nvs_flash_init());
+    ESP_ERROR_CHECK(nvs_open("files", NVS_READWRITE, &store));
+
+    for (int i = 0; i < SLOT_COUNT; i++) {
+        char key[16];
+        snprintf(key, sizeof(key), "slot%d", i);
+
+        size_t size = sizeof(slots[i]);
+        esp_err_t err = nvs_get_blob(store, key, &slots[i], &size);
+
+        if (err == ESP_ERR_NVS_NOT_FOUND) {
+            continue;  // New slot: static RAM is already zeroed.
+        }
+
+        ESP_ERROR_CHECK(err);
+
+        if (size != sizeof(slots[i])) {
+            memset(&slots[i], 0, sizeof(slots[i]));
+        }
+    }
+}
 
 static bool check_pin(const char *pin) {
     uint8_t hash[32];
@@ -180,11 +207,21 @@ static void handle_write(const request_t *r) {
         send_response(ST_BAD_SLOT, NULL, 0);
         return;
     }
+
+    memset(&slots[r->slot], 0, sizeof(slot_t));
     memcpy(slots[r->slot].data, r->data, r->len);
     slots[r->slot].len = r->len;
+
+    char key[16];
+    snprintf(key, sizeof(key), "slot%d", r->slot);
+
+    ESP_ERROR_CHECK(nvs_set_blob(
+        store, key, &slots[r->slot], sizeof(slot_t)));
+    ESP_ERROR_CHECK(nvs_commit(store));
+
     send_response(ST_OK, NULL, 0);
 }
- 
+
 static void dispatch(const request_t *r) {
     if (failed_attempts >= MAX_ATTEMPTS) {
         send_response(ST_LOCKED, NULL, 0);
@@ -215,6 +252,7 @@ static void usb_init(void) {
  
 void app_main(void) {
     usb_init();
+    storage_init();
  
     while (1) {
         wait_for_sync();
